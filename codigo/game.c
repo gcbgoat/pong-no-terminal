@@ -11,6 +11,7 @@
 #define WINNING_SCORE 10
 #define SCORES_FILE "pong_scores.dat"
 #define BALL_SPEED 1.8f
+#define MAX_SPEED 3.5f
 
 /* ========== Funções da Bola ========== */
 
@@ -43,6 +44,8 @@ void jogo_inicio(GameState *game) {
     carregar_placar(game);
 }
 
+/* ========== Entrada de Teclas ========== */
+
 void processar_input(GameState *game) {
     if (!keyhit()) return;
     
@@ -68,7 +71,10 @@ void processar_input(GameState *game) {
     }
 }
 
+/* ========== Atualização do Jogo ========== */
+
 void atualizar_jogo(GameState *game) {
+    static int contador_colisoes = 0;
     if (game->status != PLAYING) return;
 
     game->bola_x += game->bola_dir_x;
@@ -77,21 +83,34 @@ void atualizar_jogo(GameState *game) {
     // Colisão com bordas
     if (game->bola_y <= 0 || game->bola_y >= SCREEN_HEIGHT - 1) {
         game->bola_dir_y *= -1;
+        printf("\a"); // som de batida
+        fflush(stdout);
     }
 
-    // Colisão com raquetes (versão otimizada)
+    // Colisão com raquetes
     if (game->bola_x <= 1 && abs(game->bola_y - game->raquete_esquerda) <= 2) {
         float hit_pos = (game->bola_y - game->raquete_esquerda) / 2.0f;
-        game->bola_dir_x = (game->bola_dir_x < 0 ? -game->bola_dir_x : game->bola_dir_x) * 1.1f;
+        game->bola_dir_x = fabs(game->bola_dir_x) * 1.1f;
         game->bola_dir_y = hit_pos;
-        game->bola_x = 2; // Previne colisão múltipla
+        game->bola_x = 2;
+        contador_colisoes++;
+        printf("\a");
+        fflush(stdout);
     }
 
     if (game->bola_x >= SCREEN_WIDTH - 2 && abs(game->bola_y - game->raquete_direita) <= 2) {
         float hit_pos = (game->bola_y - game->raquete_direita) / 2.0f;
-        game->bola_dir_x = (game->bola_dir_x > 0 ? -game->bola_dir_x : game->bola_dir_x) * 1.1f;
+        game->bola_dir_x = -fabs(game->bola_dir_x) * 1.1f;
         game->bola_dir_y = hit_pos;
         game->bola_x = SCREEN_WIDTH - 3;
+        contador_colisoes++;
+        printf("\a");
+        fflush(stdout);
+    }
+
+    // Dificuldade dinâmica
+    if (contador_colisoes % 5 == 0 && fabs(game->bola_dir_x) < MAX_SPEED) {
+        game->bola_dir_x *= 1.1f;
     }
 
     // Sistema de pontuação
@@ -99,6 +118,9 @@ void atualizar_jogo(GameState *game) {
         if (game->bola_x < 0) game->placar_direita++;
         else game->placar_esquerda++;
         
+        printf("\a"); // som de ponto
+        fflush(stdout);
+
         if (game->placar_esquerda >= WINNING_SCORE || game->placar_direita >= WINNING_SCORE) {
             game->status = GAME_OVER;
             game->jogador_vencedor = (game->placar_esquerda > game->placar_direita) ? 1 : 2;
@@ -111,41 +133,26 @@ void atualizar_jogo(GameState *game) {
 
 /* ========== Renderização ========== */
 
-void desenho_raquetes(GameState *game) {
-    for (int i = -1; i <= 1; i++) {
-        int esquerda = game->raquete_esquerda + i;
-        if (esquerda >= 0 && esquerda < SCREEN_HEIGHT) {
-            screenGotoxy(0, esquerda);
-            putchar('|');
-        }
-        int direita = game->raquete_direita + i;
-        if (direita >= 0 && direita < SCREEN_HEIGHT) {
-            screenGotoxy(SCREEN_WIDTH-1, direita);
-            putchar('|');
-        }
-    }
-}
-
-void desenho_bola(GameState *game) {
-    if (game->bola_x >= 0 && game->bola_x < SCREEN_WIDTH && 
-        game->bola_y >= 0 && game->bola_y < SCREEN_HEIGHT) {
-        screenGotoxy((int)game->bola_x, (int)game->bola_y);
-        putchar('O');
+void mostrar_estrelas() {
+    for (int i = 0; i < 15; i++) {
+        screenGotoxy(rand() % SCREEN_WIDTH, rand() % SCREEN_HEIGHT);
+        putchar((rand() % 2) ? '.' : '*');
     }
 }
 
 void mostrar_menu(GameState *game) {
     screenClear();
-    
-    // Título centralizado com efeito
+    mostrar_estrelas();
+
+    screenSetColor(YELLOW, BLACK);
     screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 - 5);
     printf("====================");
     screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 - 4);
-    printf("    PONG SHOWDOWN    ");
+    printf("    PONG DELUXE     ");
     screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 - 3);
     printf("====================");
+    screenSetColor(WHITE, BLACK);
 
-    // Opções do menu alinhadas
     screenGotoxy(SCREEN_WIDTH/2 - 15, SCREEN_HEIGHT/2 - 1);
     printf("> ESPAÇO - Iniciar Jogo");
     screenGotoxy(SCREEN_WIDTH/2 - 15, SCREEN_HEIGHT/2);
@@ -153,215 +160,155 @@ void mostrar_menu(GameState *game) {
     screenGotoxy(SCREEN_WIDTH/2 - 15, SCREEN_HEIGHT/2 + 1);
     printf("> R - Resetar Placar");
 
-    // Linha divisória
-    screenGotoxy(SCREEN_WIDTH/2 - 15, SCREEN_HEIGHT/2 + 3);
-    printf("----------------------------");
+    if ((time(NULL) % 2) == 0) {
+        screenSetColor(GREEN, BLACK);
+        screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 + 3);
+        printf(">>> PRESSIONE ESPAÇO <<<");
+        screenSetColor(WHITE, BLACK);
+    }
 
-    // Melhores placares
-    screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 + 5);
-    printf("MELHORES PARTIDAS");
-
+    // Melhores partidas
+    screenGotoxy(SCREEN_WIDTH/2 - 8, SCREEN_HEIGHT/2 + 6);
+    printf("MELHORES PARTIDAS:");
     ScoreNode *atual = game->historico_placar;
     int count = 0;
     while (atual != NULL && count < 3) {
-        screenGotoxy(SCREEN_WIDTH/2 - 8, SCREEN_HEIGHT/2 + 7 + count);
+        screenGotoxy(SCREEN_WIDTH/2 - 6, SCREEN_HEIGHT/2 + 8 + count);
         printf("%d. %2d - %-2d", count + 1, atual->placar_esquerda, atual->placar_direita);
         atual = atual->next;
         count++;
-    }
-
-    // Elementos decorativos nas laterais
-    for (int i = 0; i < 3; i++) {
-        screenGotoxy(SCREEN_WIDTH/2 - 20, SCREEN_HEIGHT/2 - 4 + i);
-        putchar('|');
-        screenGotoxy(SCREEN_WIDTH/2 + 20, SCREEN_HEIGHT/2 - 4 + i);
-        putchar('|');
     }
 }
 
 void mostrar_game_over(GameState *game) {
     screenClear();
-    
+    mostrar_estrelas();
+
     const char* vencedor_msg = game->jogador_vencedor == 1 ? 
         "JOGADOR 1 VENCEU!" : "JOGADOR 2 VENCEU!";
 
-    // Moldura superior
-    screenGotoxy(SCREEN_WIDTH/2 - 12, SCREEN_HEIGHT/2 - 5);
-    printf(" _____________________ ");
-    screenGotoxy(SCREEN_WIDTH/2 - 12, SCREEN_HEIGHT/2 - 4);
-    printf("|                     |");
+    screenSetColor(YELLOW, BLACK);
+    screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 - 2);
+    printf("🏆  %s  🏆", vencedor_msg);
+    screenSetColor(WHITE, BLACK);
 
-    // Título central
-    screenGotoxy(SCREEN_WIDTH/2 - 5, SCREEN_HEIGHT/2 - 3);
-    printf("GAME OVER");
+    screenGotoxy(SCREEN_WIDTH/2 - 7, SCREEN_HEIGHT/2);
+    printf("Placar: %d - %d", game->placar_esquerda, game->placar_direita);
 
-    // Linha divisória
-    screenGotoxy(SCREEN_WIDTH/2 - 12, SCREEN_HEIGHT/2 - 2);
-    printf("|---------------------|");
-
-    // Mensagem do vencedor
-    screenGotoxy(SCREEN_WIDTH/2 - strlen(vencedor_msg)/2, SCREEN_HEIGHT/2 - 1);
-    printf("%s", vencedor_msg);
-
-    // Placar final
-    char placar_final[30];
-    sprintf(placar_final, "Placar: %d - %d", game->placar_esquerda, game->placar_direita);
-    screenGotoxy(SCREEN_WIDTH/2 - strlen(placar_final)/2, SCREEN_HEIGHT/2);
-    printf("%s", placar_final);
-
-    // Moldura inferior
-    screenGotoxy(SCREEN_WIDTH/2 - 12, SCREEN_HEIGHT/2 + 1);
-    printf("|                     |");
-    screenGotoxy(SCREEN_WIDTH/2 - 12, SCREEN_HEIGHT/2 + 2);
-    printf(" --------------------- ");
-
-    // Instrução para sair
-    screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 + 4);
+    screenGotoxy(SCREEN_WIDTH/2 - 10, SCREEN_HEIGHT/2 + 2);
     printf("Pressione Q para sair");
-
-    // Efeitos decorativos nas laterais
-    for (int i = 0; i < 5; i++) {
-        screenGotoxy(10, SCREEN_HEIGHT/2 - 3 + i);
-        putchar('[');
-        screenGotoxy(SCREEN_WIDTH - 11, SCREEN_HEIGHT/2 - 3 + i);
-        putchar(']');
-    }
 }
 
 void renderizar(GameState *game) {
-    screenClear();  // Limpa a tela primeiro
+    screenClear();
 
     if (game->status == PLAYING) {
-        // Preenche a matriz com espaços
-        for (int y = 0; y < SCREEN_HEIGHT; y++) {
-            memset(game->campo[y], ' ', SCREEN_WIDTH);
-        }
+        screenSetColor(WHITE, BLACK);
 
-        // Desenha a bola
-        if (game->bola_y >= 0 && game->bola_y < SCREEN_HEIGHT && 
-            game->bola_x >= 0 && game->bola_x < SCREEN_WIDTH) {
-            game->campo[(int)game->bola_y][(int)game->bola_x] = 'O';
-        }
+        // Bola
+        screenSetColor(YELLOW, BLACK);
+        screenGotoxy((int)game->bola_x, (int)game->bola_y);
+        putchar('O');
 
-        // Desenha as raquetes
+        // Raquetes
+        screenSetColor(WHITE, BLUE);
         for (int i = -1; i <= 1; i++) {
-            int esquerda = game->raquete_esquerda + i;
-            int direita = game->raquete_direita + i;
-            
-            if (esquerda >= 0 && esquerda < SCREEN_HEIGHT) {
-                game->campo[esquerda][0] = '|';
-            }
-            if (direita >= 0 && direita < SCREEN_HEIGHT) {
-                game->campo[direita][SCREEN_WIDTH-1] = '|';
+            int e = game->raquete_esquerda + i;
+            if (e >= 0 && e < SCREEN_HEIGHT) {
+                screenGotoxy(0, e);
+                putchar('|');
             }
         }
 
-        // Renderiza a matriz
-        for (int y = 0; y < SCREEN_HEIGHT; y++) {
-            screenGotoxy(0, y);
-            fwrite(game->campo[y], sizeof(char), SCREEN_WIDTH, stdout);
+        screenSetColor(WHITE, RED);
+        for (int i = -1; i <= 1; i++) {
+            int d = game->raquete_direita + i;
+            if (d >= 0 && d < SCREEN_HEIGHT) {
+                screenGotoxy(SCREEN_WIDTH-1, d);
+                putchar('|');
+            }
         }
 
-        // Placar (renderizado separadamente para evitar flicker)
+        // Placar
+        screenSetColor(GREEN, BLACK);
         char placar[10];
         sprintf(placar, "%d - %d", game->placar_esquerda, game->placar_direita);
         screenGotoxy(SCREEN_WIDTH/2 - 3, 0);
         printf("%s", placar);
+        screenSetColor(WHITE, BLACK);
 
-    } else {
-        // Menus são renderizados de forma independente
-        switch(game->status) {
-            case MENU:
-                mostrar_menu(game);
-                break;
-            case GAME_OVER:
-                mostrar_game_over(game);
-                break;
-            case PLAYING:  // Adicionado para eliminar o warning
-                break;
-        }
+    } else if (game->status == MENU) {
+        mostrar_menu(game);
+    } else if (game->status == GAME_OVER) {
+        mostrar_game_over(game);
     }
-    
+
     screenUpdate();
 }
 
-/* ========== Funções de Placar ========== */
+/* ========== Placar e Memória ========== */
 
 void add_placar_historico(GameState *game) {
     ScoreNode *novo = malloc(sizeof(ScoreNode));
     if (!novo) return;
-
     novo->placar_esquerda = game->placar_esquerda;
     novo->placar_direita = game->placar_direita;
     novo->next = game->historico_placar;
     game->historico_placar = novo;
-    
     salvar_placar(game);
 }
 
 void salvar_placar(GameState *game) {
     FILE *file = fopen(SCORES_FILE, "wb");
     if (!file) return;
-
-    ScoreNode *atual = game->historico_placar;
-    while (atual != NULL) {
-        fwrite(atual, sizeof(ScoreNode), 1, file);
-        atual = atual->next;
+    ScoreNode *a = game->historico_placar;
+    while (a != NULL) {
+        fwrite(a, sizeof(ScoreNode), 1, file);
+        a = a->next;
     }
-
     fclose(file);
 }
 
 void carregar_placar(GameState *game) {
     FILE *file = fopen(SCORES_FILE, "rb");
     if (!file) return;
-
     ScoreNode temp;
     while (fread(&temp, sizeof(ScoreNode), 1, file) == 1) {
         ScoreNode *novo = malloc(sizeof(ScoreNode));
         if (!novo) break;
-        
-        novo->placar_esquerda = temp.placar_esquerda;
-        novo->placar_direita = temp.placar_direita;
+        *novo = temp;
         novo->next = game->historico_placar;
         game->historico_placar = novo;
     }
-
     fclose(file);
 }
 
 void resetar_placar(GameState *game) {
-    ScoreNode *atual = game->historico_placar;
-    while (atual != NULL) {
-        ScoreNode *temp = atual;
-        atual = atual->next;
-        free(temp);
+    ScoreNode *a = game->historico_placar;
+    while (a) {
+        ScoreNode *t = a;
+        a = a->next;
+        free(t);
     }
     game->historico_placar = NULL;
-    
     remove(SCORES_FILE);
     
-    if (game->status == MENU) {
-        screenClear();
-        screenGotoxy(SCREEN_WIDTH/2 - 15, SCREEN_HEIGHT/2 + 8);
-        printf("Placares resetados com sucesso!");
-        screenUpdate();
-        usleep(1500000);
-    }
+    screenClear();
+    screenGotoxy(SCREEN_WIDTH/2 - 15, SCREEN_HEIGHT/2);
+    printf("Placares resetados com sucesso!");
+    screenUpdate();
+    usleep(1000000);
 }
 
 void liberar(GameState *game) {
     if (game->campo) {
-        for (int i = 0; i < SCREEN_HEIGHT; i++) {
-            free(game->campo[i]);
-        }
+        for (int i = 0; i < SCREEN_HEIGHT; i++) free(game->campo[i]);
         free(game->campo);
     }
-    
-    ScoreNode *atual = game->historico_placar;
-    while (atual != NULL) {
-        ScoreNode *temp = atual;
-        atual = atual->next;
-        free(temp);
+    ScoreNode *a = game->historico_placar;
+    while (a) {
+        ScoreNode *t = a;
+        a = a->next;
+        free(t);
     }
 }
