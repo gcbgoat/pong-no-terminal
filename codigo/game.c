@@ -51,25 +51,46 @@ void processar_input(GameState *game) {
     
     int ch = readch();
     
+    // ===== MENU =====
     if (game->status == MENU) {
         if (ch == ' ') game->status = PLAYING;
-        else if (ch == 'q') game->quit = true;
+        else if (ch == 'q' || ch == 'Q') game->quit = true;
         else if (ch == 'r' || ch == 'R') resetar_placar(game);
         return;
     }
     
-    if (game->status == GAME_OVER && ch == 'q') {
+    // ===== GAME OVER =====
+    if (game->status == GAME_OVER && (ch == 'q' || ch == 'Q')) {
         game->quit = true;
         return;
     }
 
-    switch(ch) {
-        case 'w': if (game->raquete_esquerda > 1) game->raquete_esquerda--; break;
-        case 's': if (game->raquete_esquerda < SCREEN_HEIGHT-2) game->raquete_esquerda++; break;
-        case 'i': if (game->raquete_direita > 1) game->raquete_direita--; break;
-        case 'k': if (game->raquete_direita < SCREEN_HEIGHT-2) game->raquete_direita++; break;
+    // ===== PLAYING =====
+    if (game->status == PLAYING) {
+        switch(ch) {
+            case 'w': 
+                if (game->raquete_esquerda > 1) game->raquete_esquerda--; 
+                break;
+            case 's': 
+                if (game->raquete_esquerda < SCREEN_HEIGHT-2) game->raquete_esquerda++; 
+                break;
+            case 'i': 
+                if (game->raquete_direita > 1) game->raquete_direita--; 
+                break;
+            case 'k': 
+                if (game->raquete_direita < SCREEN_HEIGHT-2) game->raquete_direita++; 
+                break;
+
+            case 'q':
+            case 'Q':
+                game->status = MENU;   
+                resetar_bola(game);   
+                return;
+        }
     }
 }
+
+
 
 /* ========== Atualização do Jogo ========== */
 
